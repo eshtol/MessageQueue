@@ -1,12 +1,37 @@
 // MessageQueue.cpp : This file contains the 'main' function. Program execution begins and ends there.
 //
 
-#include "pch.h"
+
 #include <iostream>
+#include "MessageQueue.h"
+#include <string>
+
+using gMessageQueue = MessageQueue<MainChannelMessage, MemeMessage, FileSystemMessage>;
+//gMessageQueue;
+//decltype(gMessageQueue::m_channels) gMessageQueue::m_channels;
+//gMessageQueue g_queue;
+
+class MemeListener : public ChannelListener<gMessageQueue, MemeMessage> 
+{
+public:
+	MemeListener() { SetSubscription(true); }
+	void ChechIfNewMemes() 
+	{
+		while (m_queue.size())
+			std::cout << m_queue.front()->funny_thing << '\n',
+			m_queue.pop();
+	}
+};
+
 
 int main()
 {
-    std::cout << "Hello World!\n"; 
+	MemeListener ml;
+	auto q = gMessageQueue::m_channels;
+
+	ml.ChechIfNewMemes();
+
+	return 0;
 }
 
 // Run program: Ctrl + F5 or Debug > Start Without Debugging menu
