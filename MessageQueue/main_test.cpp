@@ -1,46 +1,75 @@
-// MessageQueue.cpp : This file contains the 'main' function. Program execution begins and ends there.
-//
-
-
 #include <iostream>
 #include "MessageQueue.h"
 #include <string>
 
 using gMessageQueue = MessageQueue<MainChannelMessage, MemeMessage, FileSystemMessage>;
-//gMessageQueue;
-//decltype(gMessageQueue::m_channels) gMessageQueue::m_channels;
-//gMessageQueue g_queue;
 
 class MemeListener : public ChannelListener<gMessageQueue, MemeMessage> 
 {
 public:
 	MemeListener() { SetSubscription(true); }
-	void ChechIfNewMemes() 
+
+	void CheckIfNewMemes() 
 	{
+		auto& queue = ChannelListener<gMessageQueue, MemeMessage>::m_queue;
+		if (queue.size()) std::cout << "Hi! I got some funny memes. Can't wait to share them with you:\n";
 		while (m_queue.size())
-			std::cout << m_queue.front()->funny_thing << '\n',
+			std::cout << '\t' << m_queue.front()->funny_thing << '\n',
 			m_queue.pop();
 	}
 };
 
+class TwoChannelListener : public ChannelListener<gMessageQueue, MainChannelMessage>, public ChannelListener<gMessageQueue, MemeMessage>
+{
+public:
+	TwoChannelListener() 
+	{
+		ChannelListener<gMessageQueue, MainChannelMessage>::SetSubscription(true);
+		ChannelListener<gMessageQueue, MemeMessage>::SetSubscription(true);
+	}
+
+	void HandleMessages() 
+	{
+		HandleMainMessages();
+		HandleMemeMessages();
+	}
+
+	void HandleMainMessages() 
+	{
+		auto& queue = ChannelListener<gMessageQueue, MainChannelMessage>::m_queue;
+		if (queue.size()) std::cout << "Got new system messages! Handling them...\n";
+		while (queue.size())
+			std::cout << "\tWorking on event " << queue.front()->event_descritor << '\n',
+			queue.pop();
+	}
+
+	void HandleMemeMessages() 
+	{
+		auto& queue = ChannelListener<gMessageQueue, MemeMessage>::m_queue;
+		if (queue.size()) std::cout << "Got new memes! Printing them...\n";
+		while (queue.size())
+			std::cout << '\t' << queue.front()->funny_thing << '\n',
+			queue.pop();
+	}
+};
+
+struct NotRegisteredMessage {};
 
 int main()
 {
-	MemeListener ml;
-	auto q = gMessageQueue::m_channels;
+	MemeListener ml1, ml2;
+	TwoChannelListener tcl;
+//	auto& q = gMessageQueue::m_channels;
 
-	ml.ChechIfNewMemes();
+
+	gMessageQueue::PostMessage(std::make_shared<MemeMessage>("One does not simply use templates without kilobytes of error logs."));
+	gMessageQueue::PostMessage(std::make_shared<MainChannelMessage>(4538));
+	gMessageQueue::BroadcastMessages();
+
+	ml1.CheckIfNewMemes();
+	ml2.CheckIfNewMemes();
+	tcl.HandleMessages();
 
 	return 0;
 }
 
-// Run program: Ctrl + F5 or Debug > Start Without Debugging menu
-// Debug program: F5 or Debug > Start Debugging menu
-
-// Tips for Getting Started: 
-//   1. Use the Solution Explorer window to add/manage files
-//   2. Use the Team Explorer window to connect to source control
-//   3. Use the Output window to see build output and other messages
-//   4. Use the Error List window to view errors
-//   5. Go to Project > Add New Item to create new code files, or Project > Add Existing Item to add existing code files to the project
-//   6. In the future, to open this project again, go to File > Open > Project and select the .sln file
