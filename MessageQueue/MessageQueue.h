@@ -16,13 +16,13 @@ class ChannelListener
 {
 	private:
 		friend MsgQueue;
-		concurrent_queue<std::shared_ptr<Message>> m_own_queue;
+		concurrent_queue<std::shared_ptr<Message>> m_received_messages;
 
 	protected:		
-		typename decltype(m_own_queue)::value_type GetUnhandledMessage() { return HaveUnhandledMessages() ? m_own_queue.extract_first() : nullptr; }
-		void ReceiveMessage(typename decltype(m_own_queue)::value_type mess_ptr) { m_own_queue.emplace(std::move(mess_ptr)); }
-		bool HaveUnhandledMessages() const { return m_own_queue.size(); }
-		void SetSubscription(const bool subscribe) { subscribe ? MsgQueue::AddSubscriber(this) : MsgQueue::RemoveSubscriber(this); } // Move constructor/assign
+		typename decltype(m_received_messages)::value_type GetUnhandledMessage() { return HaveUnhandledMessages() ? m_received_messages.extract_first() : nullptr; }
+		void ReceiveMessage(typename decltype(m_received_messages)::value_type mess_ptr) { m_received_messages.emplace(std::move(mess_ptr)); }
+		bool HaveUnhandledMessages() const { return m_received_messages.size(); }
+		void SetSubscription(const bool subscribe) { subscribe ? MsgQueue::AddSubscriber(this) : MsgQueue::RemoveSubscriber(this); } // Move & copy constructor/assign
 		~ChannelListener() { SetSubscription(false); }
 };
 
@@ -50,9 +50,9 @@ template <typename... Messages> class MessageQueue
 				}
 
 			public:
-				void AddListener(ListenerT *const listener) { m_listeners.emplace(listener); }
-				void RemoveListener(ListenerT *const listener) { m_listeners.erase(listener); }
-				void PushMessage(typename decltype(m_queue)::value_type mess_ptr) {	m_queue.emplace(std::move(mess_ptr)); }
+				inline void AddListener(ListenerT *const listener) { m_listeners.emplace(listener); }
+				inline void RemoveListener(ListenerT *const listener) { m_listeners.erase(listener); }
+				inline void PushMessage(typename decltype(m_queue)::value_type mess_ptr) { m_queue.emplace(std::move(mess_ptr)); }
 		};
 
 		class QueueCore : public Channel<Messages>...
@@ -60,9 +60,7 @@ template <typename... Messages> class MessageQueue
 			private:
 				void CoreLoop()
 				{
-					while (true)
-						(Channel<Messages>::SendOutQueue(), ...),	// Magic is here
-						std::this_thread::sleep_for(std::chrono::milliseconds(1));
+					while (true) (Channel<Messages>::SendOutQueue(), ..., std::this_thread::sleep_for(std::chrono::milliseconds(1)));	// Magic is here
 				};
 
 			public:
@@ -70,9 +68,8 @@ template <typename... Messages> class MessageQueue
 			
 		} static inline m_core;	
 		
-
 	public:
-		template <typename MessT> static void PostMessage(std::shared_ptr<MessT> mess_ptr) { m_core.Channel<MessT>::PushMessage(std::move(mess_ptr)); }
-		template <typename MessT> static void AddSubscriber(ChannelListener<MessageQueue, MessT> *const subscriber) { m_core.Channel<MessT>::AddListener(subscriber); }
-		template <typename MessT> static void RemoveSubscriber(ChannelListener<MessageQueue, MessT> *const subscriber) { m_core.Channel<MessT>::RemoveListener(subscriber); }
+		template <typename MessT> static inline void PostMessage(std::shared_ptr<MessT> mess_ptr) { m_core.Channel<MessT>::PushMessage(std::move(mess_ptr)); }
+		template <typename MessT> static inline void AddSubscriber(ChannelListener<MessageQueue, MessT> *const subscriber) { m_core.Channel<MessT>::AddListener(subscriber); }
+		template <typename MessT> static inline void RemoveSubscriber(ChannelListener<MessageQueue, MessT> *const subscriber) { m_core.Channel<MessT>::RemoveListener(subscriber); }
 };

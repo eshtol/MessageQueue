@@ -12,7 +12,7 @@ class concurrent_uset : protected std::unordered_set<_Kty, _Hasher, _Keyeq, _All
 	private:
 		typedef std::unordered_set<_Kty, _Hasher, _Keyeq, _Alloc> MyBase;
 		std::mutex mtx;
-		typedef std::lock_guard<std::mutex> lock_guard;
+		typedef std::lock_guard<decltype(mtx)> lock_guard;
 		using typename MyBase::size_type;
 		using typename MyBase::key_type;
 		using typename MyBase::iterator;
@@ -27,7 +27,6 @@ class concurrent_uset : protected std::unordered_set<_Kty, _Hasher, _Keyeq, _All
 			return MyBase::erase(_Keyval);
 		}
 
-//		using MyBase::emplace;
 		template<class... _Valty> iterator emplace(_Valty&&... _Val)
 		{
 			lock_guard lock(mtx);
@@ -51,11 +50,10 @@ class concurrent_queue : protected std::queue<_Ty, _Container>
 {
 	private:
 		typedef std::queue<_Ty, _Container> MyBase;
-		using typename MyBase::reference;
 		using MyBase::front;
 		using MyBase::pop;
 		std::mutex mtx;
-		typedef std::lock_guard<std::mutex> lock_guard;
+		typedef std::lock_guard<decltype(mtx)> lock_guard;
 
 	public:
 		using typename MyBase::value_type;
@@ -74,11 +72,4 @@ class concurrent_queue : protected std::queue<_Ty, _Container>
 			lock_guard lock(mtx);
 			return MyBase::emplace(std::forward<_Valty>(_Val)...);
 		}
-		/*
-		void push(value_type&& _Val) 
-		{
-			lock_guard lock(mtx);
-			MyBase::push(std::forward<value_type&&>(_Val));
-		}
-		*/
 };
