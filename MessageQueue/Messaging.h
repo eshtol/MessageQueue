@@ -1,10 +1,5 @@
 #pragma once
-#include <unordered_set>
-#include <queue>
 #include <memory>
-#include <algorithm>
-#include <functional>
-#include <mutex>
 #include <thread>
 #include "ConcurrentContainers.h"
 #include "TaskExecutor.h"
@@ -15,15 +10,13 @@
 class Messaging 
 {
 	public:
-		template <typename T> struct message_tag {};
+		template <typename... Messages> class MessageListener;  // forwarded declaration
 
 	private:
-		template <typename Message> class ChannelListener;  // forwarded declaration
-
 		template <typename Message> class MessageChannel
 		{
 			private:
-				typedef ChannelListener<Message> ListenerT;
+				typedef MessageListener<Message> ListenerT;
 				static inline concurrent_queue<std::shared_ptr<const Message>> m_queue;
 				static inline concurrent_uset<ListenerT*> m_listeners;
 
@@ -45,69 +38,56 @@ class Messaging
 				static inline void PushMessage(typename decltype(m_queue)::value_type&& mess_ptr) { m_queue.emplace(std::move(mess_ptr)); }
 		};
 
-		template <typename Message> class ChannelListener
+		template <typename T> struct message_tag {};
+
+		template <typename... Messages> class MessageListener : protected MessageListener<Messages>...
+		{
+			private:
+				template <typename Message> using Base = MessageListener<Message>;
+			protected:
+				template <typename Message> using message_tag = typename Base<Message>::template message_tag<Message>;	//Хитрая строчка, правда? :)
+				template <typename Message> inline typename Base<Message>::MessagePtr GetUnhandledMessage() { return Base<Message>::GetUnhandledMessage(); }
+				template <typename Message> inline bool HaveUnhandledMessages() const { return Base<Message>::HaveUnhandledMessages(); }
+				template <typename Message> inline void SetSubscription(const bool subscribe) { Base<Message>::SetSubscription(subscribe); }
+				template <typename Message> inline void HandleMessage() { Base<Message>::HandleMessage(message_tag<Message>); };
+			public:
+				template <typename Message> inline void ReceiveMessage(typename Base<Message>::MessagePtr mess_ptr) { Base<Message>::ReceiveMessage(mess_ptr); }
+		};
+
+		template <typename Message> class MessageListener<Message>
 		{
 			protected:
 				typedef std::shared_ptr<const Message> MessagePtr;
+				template <typename T> using message_tag = Messaging::message_tag<T>;
 			private:
 				typedef MessageChannel<Message> Channel;
 				friend class Channel;
 				concurrent_queue<MessagePtr> m_received_messages;
 
-				struct MessageHanldeTask : public IExecutableT<ChannelListener&>
+				struct MessageHanldeTask : public IExecutableT<MessageListener&>
 				{
-					void execute() override { std::get<0>(IExecutableT<ChannelListener&>::args).HandleMessage(message_tag<Message>()); }
-					using IExecutableT<ChannelListener&>::IExecutableT;
+					void execute() override { std::get<0>(IExecutableT<MessageListener&>::args).HandleMessage(message_tag<Message>()); }
+					using IExecutableT<MessageListener&>::IExecutableT;
 				};
 
 			protected:
 				MessagePtr GetUnhandledMessage() { return HaveUnhandledMessages() ? m_received_messages.extract_first() : nullptr; }
+				bool HaveUnhandledMessages() const { return m_received_messages.size(); }
+				void SetSubscription(const bool subscribe) { subscribe ? Channel::AddListener(this) : Channel::RemoveListener(this); } // Move & copy constructor/assign
+				virtual void HandleMessage(message_tag<Message>) = 0;
+				~MessageListener() { SetSubscription(false); }  // Doesn't need to be virtual.
+			public:
 				void ReceiveMessage(MessagePtr mess_ptr)
 				{
 					m_received_messages.emplace(std::move(mess_ptr));
 					TaskScheduler::ExecuteTask(std::make_shared<MessageHanldeTask>(*this));
 				}
-				bool HaveUnhandledMessages() const { return m_received_messages.size(); }
-				void SetSubscription(const bool subscribe) { subscribe ? Channel::AddListener(this) : Channel::RemoveListener(this); } // Move & copy constructor/assign
-				virtual void HandleMessage(message_tag<Message>) = 0;
-				~ChannelListener() { SetSubscription(false); }  // Doesn't need to be virtual.
+
 		};
 
 		template <typename Message> class ChannelPublisher {};  // Is it needed?
 
-
 	public:
-
-		template <typename... Messages> class MessageListener : private ChannelListener<Messages>... 
-		{
-			private:
-				template <typename Message> using Base = ChannelListener<Message>; 
-			protected:
-				template <typename Message> typename Base<Message>::MessagePtr GetUnhandledMessage() { return Base<Message>::GetUnhandledMessage(); }
-				template <typename Message> bool HaveUnhandledMessages() const { return Base<Message>::HaveUnhandledMessages(); }
-				template <typename Message> void SetSubscription(const bool subscribe) { Base<Message>::SetSubscription(subscribe); }
-				template <typename Message> void HandleMessage() { Base<Message>::HandleMessage(message_tag<Message>); };
-				template <typename T> using message_tag = Messaging::message_tag<T>;
-			public:
-				template <typename Message> void ReceiveMessage(typename Base<Message>::MessagePtr mess_ptr) { Base<Message>::ReceiveMessage(mess_ptr); }
-		};
-
-
-		template <typename Message> class MessageListener<Message> : private ChannelListener<Message>  // One message specialization
-		{
-			private:
-				typedef ChannelListener<Message> Base;
-			protected:
-				using Base::GetUnhandledMessage;
-				using Base::HaveUnhandledMessages;
-				using Base::SetSubscription;
-				using Base::HandleMessage;
-				template <typename T> using message_tag = Messaging::message_tag<T>;
-			public:
-				using Base::ReceiveMessage;
-		};
-
-
 		template <typename... Messages> class MessageQueue 
 		{
 			private:

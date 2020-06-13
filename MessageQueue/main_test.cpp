@@ -49,7 +49,7 @@ public:
 class NotRegisteredMessageListener : public MessageListener<NotRegisteredMessage> 
 {
 	private:
-		void HandleMessage(message_tag<NotRegisteredMessage>) 
+		void HandleMessage(message_tag<NotRegisteredMessage>)
 		{
 			std::cout << "Got unregistered message: " << GetUnhandledMessage()->information << "\n";
 		}
