@@ -30,7 +30,6 @@ class concurrent_uset : protected std::unordered_set<_Kty, _Hasher, _Keyeq, _All
 		template<class... _Valty> iterator emplace(_Valty&&... _Val)
 		{
 			lock_guard lock(mtx);
-//			return MyBase::emplace(std::forward<_Valty>(_Val)...);
 			return MyBase::emplace(std::forward<_Valty>(_Val)...).first;
 		}
 

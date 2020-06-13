@@ -46,6 +46,16 @@ public:
 };
 
 
+class NotRegisteredMessageListener : public MessageListener<NotRegisteredMessage> 
+{
+	private:
+		void HandleMessage(message_tag<NotRegisteredMessage>) 
+		{
+			std::cout << "Got unregistered message: " << GetUnhandledMessage()->information << "\n";
+		}
+};
+
+
 
 int main()
 {
@@ -54,6 +64,12 @@ int main()
 
 	gMessageQueue::PostMessage<MemeMessage>("One does not simply use templates without kilobytes of error logs.");
 	gMessageQueue::PostMessage<MainChannelMessage>(4538);
+
+	NotRegisteredMessageListener nrml;   // You can send messages bypass of message queue (directly, privately) as it is observer pattern based system.
+	auto msg = std::make_shared<NotRegisteredMessage>();
+	msg->information = 42;
+	nrml.ReceiveMessage(msg);
+
 
 	std::cin.get();
 	return 0;

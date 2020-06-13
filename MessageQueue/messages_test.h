@@ -25,4 +25,7 @@ struct FileSystemMessage
 };
 
 
-struct NotRegisteredMessage {};
+struct NotRegisteredMessage 
+{
+	int information;
+};

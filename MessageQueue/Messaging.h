@@ -73,6 +73,8 @@ class Messaging
 				~ChannelListener() { SetSubscription(false); }  // Doesn't need to be virtual.
 		};
 
+		template <typename Message> class ChannelPublisher {};  // Is it needed?
+
 
 	public:
 
@@ -82,11 +84,12 @@ class Messaging
 				template <typename Message> using Base = ChannelListener<Message>; 
 			protected:
 				template <typename Message> typename Base<Message>::MessagePtr GetUnhandledMessage() { return Base<Message>::GetUnhandledMessage(); }
-				template <typename Message> void ReceiveMessage(typename Base<Message>::MessagePtr mess_ptr) { Base<Message>::ReceiveMessage(mess_ptr); }
 				template <typename Message> bool HaveUnhandledMessages() const { return Base<Message>::HaveUnhandledMessages(); }
 				template <typename Message> void SetSubscription(const bool subscribe) { Base<Message>::SetSubscription(subscribe); }
 				template <typename Message> void HandleMessage() { Base<Message>::HandleMessage(message_tag<Message>); };
 				template <typename T> using message_tag = Messaging::message_tag<T>;
+			public:
+				template <typename Message> void ReceiveMessage(typename Base<Message>::MessagePtr mess_ptr) { Base<Message>::ReceiveMessage(mess_ptr); }
 		};
 
 
@@ -96,11 +99,12 @@ class Messaging
 				typedef ChannelListener<Message> Base;
 			protected:
 				using Base::GetUnhandledMessage;
-				using Base::ReceiveMessage;
 				using Base::HaveUnhandledMessages;
 				using Base::SetSubscription;
 				using Base::HandleMessage;
 				template <typename T> using message_tag = Messaging::message_tag<T>;
+			public:
+				using Base::ReceiveMessage;
 		};
 
 
@@ -125,8 +129,6 @@ class Messaging
 				template <typename MessT> static inline void PostMessage(std::unique_ptr<MessT>&& mess_ptr) { PostMessage(mess_ptr); }
 				template <typename MessT, typename... Args> static inline void PostMessage(Args&&... args) { PostMessage(CreateMessage<MessT>(std::forward<Args>(args)...)); }
 				template <typename MessT, typename... Args> static inline std::unique_ptr<MessT> CreateMessage(Args&&... args) { return std::make_unique<MessT>(std::forward<Args>(args)...); }
-				template <typename MessT> static inline void AddSubscriber(ChannelListener<MessT> *const subscriber) { m_core.MessageChannel<MessT>::AddListener(subscriber); }
-				template <typename MessT> static inline void RemoveSubscriber(ChannelListener<MessT> *const subscriber) { m_core.MessageChannel<MessT>::RemoveListener(subscriber); }
 		};
 };
 
