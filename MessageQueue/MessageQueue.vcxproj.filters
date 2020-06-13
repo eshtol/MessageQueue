@@ -29,5 +29,11 @@
     <ClInclude Include="ConcurrentContainers.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="TaskExecutor.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="IExecutable.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

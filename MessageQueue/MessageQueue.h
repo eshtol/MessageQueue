@@ -7,22 +7,36 @@
 #include <mutex>
 #include <thread>
 #include "ConcurrentContainers.h"
+#include "TaskExecutor.h"
+#include "IExecutable.h"
 
 /* THIS HEADER REQUIRES C++17 */
 
+template <typename T> struct message_tag {};
 
 template <typename MsgQueue, typename Message>
 class ChannelListener 
 {
 	private:
 		friend MsgQueue;
-		concurrent_queue<std::shared_ptr<Message>> m_received_messages;
+		concurrent_queue<std::shared_ptr<const Message>> m_received_messages;
+
+		struct MessageHanldeTask : public IExecutableT<ChannelListener&>
+		{
+			void execute() override { std::get<0>(IExecutableT<ChannelListener&>::args).HandleMessage(message_tag<Message>()); }
+			using IExecutableT<ChannelListener&>::IExecutableT;
+		};
 
 	protected:		
-		typename decltype(m_received_messages)::value_type GetUnhandledMessage() { return HaveUnhandledMessages() ? m_received_messages.extract_first() : nullptr; }
-		void ReceiveMessage(typename decltype(m_received_messages)::value_type mess_ptr) { m_received_messages.emplace(std::move(mess_ptr)); }
+		const typename decltype(m_received_messages)::value_type GetUnhandledMessage() { return HaveUnhandledMessages() ? m_received_messages.extract_first() : nullptr; }
+		void ReceiveMessage(typename decltype(m_received_messages)::value_type mess_ptr) 
+		{
+			m_received_messages.emplace(std::move(mess_ptr)); 
+			TaskScheduler::ExecuteTask(std::make_shared<MessageHanldeTask>(*this));
+		}
 		bool HaveUnhandledMessages() const { return m_received_messages.size(); }
 		void SetSubscription(const bool subscribe) { subscribe ? MsgQueue::AddSubscriber(this) : MsgQueue::RemoveSubscriber(this); } // Move & copy constructor/assign
+		virtual void HandleMessage(message_tag<Message>) = 0;
 		~ChannelListener() { SetSubscription(false); }
 };
 
@@ -34,7 +48,7 @@ template <typename... Messages> class MessageQueue
 		{
 			private:
 				typedef ChannelListener<MessageQueue, MessT> ListenerT;
-				concurrent_queue<std::shared_ptr<MessT>> m_queue;
+				concurrent_queue<std::shared_ptr<const MessT>> m_queue;
 				concurrent_uset<ListenerT*> m_listeners;
 
 			protected:
@@ -52,7 +66,7 @@ template <typename... Messages> class MessageQueue
 			public:
 				inline void AddListener(ListenerT *const listener) { m_listeners.emplace(listener); }
 				inline void RemoveListener(ListenerT *const listener) { m_listeners.erase(listener); }
-				inline void PushMessage(typename decltype(m_queue)::value_type mess_ptr) { m_queue.emplace(std::move(mess_ptr)); }
+				inline void PushMessage(typename decltype(m_queue)::value_type&& mess_ptr) { m_queue.emplace(std::move(mess_ptr)); }
 		};
 
 		class QueueCore : public Channel<Messages>...
@@ -69,7 +83,10 @@ template <typename... Messages> class MessageQueue
 		} static inline m_core;	
 		
 	public:
-		template <typename MessT> static inline void PostMessage(std::shared_ptr<MessT> mess_ptr) { m_core.Channel<MessT>::PushMessage(std::move(mess_ptr)); }
+		template <typename MessT> static inline void PostMessage(std::unique_ptr<MessT>& mess_ptr) { m_core.Channel<MessT>::PushMessage(std::move(mess_ptr)); }
+		template <typename MessT> static inline void PostMessage(std::unique_ptr<MessT>&& mess_ptr) { PostMessage(mess_ptr); }
+		template <typename MessT, typename... Args> static inline void PostMessage(Args&&... args) { PostMessage(CreateMessage<MessT>(std::forward<Args>(args)...)); }
+		template <typename MessT, typename... Args> static inline std::unique_ptr<MessT> CreateMessage(Args&&... args) { return std::make_unique<MessT>(std::forward<Args>(args)...); }
 		template <typename MessT> static inline void AddSubscriber(ChannelListener<MessageQueue, MessT> *const subscriber) { m_core.Channel<MessT>::AddListener(subscriber); }
 		template <typename MessT> static inline void RemoveSubscriber(ChannelListener<MessageQueue, MessT> *const subscriber) { m_core.Channel<MessT>::RemoveListener(subscriber); }
 };
