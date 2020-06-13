@@ -1,5 +1,5 @@
 #include <iostream>
-#include "MessageQueue.h"
+#include "Messaging.h"
 #include "messages_test.h"
 
 
@@ -8,7 +8,7 @@
 
 using gMessageQueue = MessageQueue<MainChannelMessage, MemeMessage, FileSystemMessage>;
 
-class MemeListener : public ChannelListener<gMessageQueue, MemeMessage> 
+class MemeListener : public MessageListener<MemeMessage>
 {
 public:
 	MemeListener() { SetSubscription(true); }
@@ -21,28 +21,26 @@ public:
 
 };
 
-class TwoChannelListener : public ChannelListener<gMessageQueue, MainChannelMessage>, public ChannelListener<gMessageQueue, MemeMessage>
+class TwoChannelListener : public MessageListener<MainChannelMessage, MemeMessage>
 {
 public:
 	TwoChannelListener() 
 	{
-		ChannelListener<gMessageQueue, MainChannelMessage>::SetSubscription(true);
-		ChannelListener<gMessageQueue, MemeMessage>::SetSubscription(true);
+		SetSubscription<MainChannelMessage>(true);
+		SetSubscription<MemeMessage>(true);
 	}
 
 	void HandleMessage(message_tag<MainChannelMessage>) override
 	{
-		typedef ChannelListener<gMessageQueue, MainChannelMessage> ThisChannel;
-		if (ThisChannel::HaveUnhandledMessages()) std::cout << "Got new system messages! Handling them...\n";
-		while (auto message = ThisChannel::GetUnhandledMessage())
+		if (HaveUnhandledMessages<MainChannelMessage>()) std::cout << "Got new system messages! Handling them...\n";
+		while (auto message = GetUnhandledMessage<MainChannelMessage>())
 			std::cout << "\tWorking on event " << message->event_descritor << '\n';
 	}
 
 	void HandleMessage(message_tag<MemeMessage>) override
 	{
-		typedef ChannelListener<gMessageQueue, MemeMessage> ThisChannel;
-		if (ThisChannel::HaveUnhandledMessages()) std::cout << "Got new memes! Printing them...\n";
-		while (auto message = ThisChannel::GetUnhandledMessage())
+		if (HaveUnhandledMessages<MemeMessage>()) std::cout << "Got new memes! Printing them...\n";
+		while (auto message = GetUnhandledMessage<MemeMessage>())
 			std::cout << '\t' << message->funny_thing << '\n';
 	}
 };

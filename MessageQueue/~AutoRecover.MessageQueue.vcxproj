@@ -165,7 +165,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ConcurrentContainers.h" />
-    <ClInclude Include="MessageQueue.h" />
+    <ClInclude Include="IExecutable.h" />
+    <ClInclude Include="Messaging.h" />
     <ClInclude Include="messages_test.h" />
     <ClInclude Include="TaskExecutor.h" />
   </ItemGroup>
