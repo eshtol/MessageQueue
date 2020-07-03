@@ -105,10 +105,10 @@ class Messaging
 				} static inline m_core;
 
 			public:
-				template <typename MessT> static inline void PostMessage(std::unique_ptr<MessT>& mess_ptr) { m_core.MessageChannel<MessT>::PushMessage(std::move(mess_ptr)); }
-				template <typename MessT> static inline void PostMessage(std::unique_ptr<MessT>&& mess_ptr) { PostMessage(mess_ptr); }
-				template <typename MessT, typename... Args> static inline void PostMessage(Args&&... args) { PostMessage(CreateMessage<MessT>(std::forward<Args>(args)...)); }
-				template <typename MessT, typename... Args> static inline std::unique_ptr<MessT> CreateMessage(Args&&... args) { return std::make_unique<MessT>(std::forward<Args>(args)...); }
+				template <typename Msg> static inline void PostMessage(std::unique_ptr<Msg>& mess_ptr) { m_core.MessageChannel<Msg>::PushMessage(std::move(mess_ptr)); }
+				template <typename Msg> static inline void PostMessage(std::unique_ptr<Msg>&& mess_ptr) { PostMessage(mess_ptr); }
+				template <typename Msg, typename... Args> static inline void PostMessage(Args&&... args) { PostMessage(CreateMessage<Msg>(std::forward<Args>(args)...)); }
+				template <typename Msg, typename... Args> static inline std::unique_ptr<Msg> CreateMessage(Args&&... args) { return std::make_unique<Msg>(std::forward<Args>(args)...); }
 		};
 };
 
@@ -116,3 +116,8 @@ class Messaging
 // Exports
 template <typename... Messages> using MessageListener = Messaging::MessageListener<Messages...>;
 template <typename... Messages> using MessageQueue = Messaging::MessageQueue<Messages...>;
+
+namespace messages 
+{
+	struct Notification {};
+}
