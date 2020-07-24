@@ -26,8 +26,7 @@ class TwoChannelListener : public MessageListener<MainChannelMessage, MemeMessag
 public:
 	TwoChannelListener() 
 	{
-		SetSubscription<MainChannelMessage>(true);
-		SetSubscription<MemeMessage>(true);
+		SetAllSubscriptions(true);
 	}
 
 	void HandleMessage(message_tag<MainChannelMessage>) override
@@ -62,8 +61,10 @@ int main()
 	MemeListener ml1, ml2;
 	TwoChannelListener tcl;
 
-	gMessageQueue::PostMessage<MemeMessage>("One does not simply use templates without kilobytes of error logs.");
-	gMessageQueue::PostMessage<MainChannelMessage>(4538);
+	//auto ml3= std::move( ml1);
+
+	gMessageQueue::SendMessageAsync<MemeMessage>("One does not simply use templates without kilobytes of error logs.");
+	gMessageQueue::SendMessageAsync<MainChannelMessage>(4538);
 
 	NotRegisteredMessageListener nrml;   // You can send messages bypass of message queue (directly, privately) as it is observer pattern based system.
 	auto msg = std::make_shared<NotRegisteredMessage>();
