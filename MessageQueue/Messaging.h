@@ -16,24 +16,29 @@ class Messaging
 	private:
 		template <typename Message> class MessageChannel
 		{
+			public:
+				typedef std::shared_ptr<const Message> MessagePtr;
+
 			private:
 				typedef MessageListener<Message> ListenerT;
-				typedef std::shared_ptr<Message> MessagePtr;
 				static inline concurrent_uset<ListenerT*> m_listeners;
+
+				static inline void SendOutMessage(void (ListenerT::*const receive_method)(MessagePtr), const MessagePtr&& mess_ptr)
+				{
+					const auto iters = m_listeners.iteration_lock();
+					std::for_each(iters.first, iters.second, std::bind(receive_method, std::placeholders::_1, mess_ptr));
+					m_listeners.iteration_unlock();
+				}
 
 				struct DispatchingTask : IExecutableT<MessagePtr>
 				{
-					void execute() override 
-					{
-						const auto iters = m_listeners.iteration_lock();
-						std::for_each(iters.first, iters.second, std::bind(&ListenerT::ReceiveMessage, std::placeholders::_1, std::get<0>(IExecutableT<MessagePtr>::args)));
-						m_listeners.iteration_unlock();
-					}
+					void execute() override { SendOutMessage(&ListenerT::ReceiveMessageAsync, std::move(std::get<0>(IExecutableT<MessagePtr>::args))); }
 					using IExecutableT<MessagePtr>::IExecutableT;
 				};
 
 			protected:
-				static inline void SendOutMessage(MessagePtr&& mess_ptr) { DispatchingThread.AcceptTask(std::make_shared<DispatchingTask>(std::move(mess_ptr))); }
+				static inline void SendOutMessageAsync(MessagePtr&& mess_ptr) { DispatchingThread.AcceptTask(std::make_shared<DispatchingTask>(std::move(mess_ptr))); }
+				static inline void SendOutMessageSync(MessagePtr&& mess_ptr) { SendOutMessage(&ListenerT::ReceiveMessageSync, std::move(mess_ptr));	}
 
 			public:
 				static inline void AddListener(ListenerT *const listener) { m_listeners.emplace(listener); }
@@ -56,18 +61,21 @@ class Messaging
 				template <typename Message> inline void GetSubscription() const { return Base<Message>::GetSubscription(); }
 				template <typename Message> inline void HandleMessage() { Base<Message>::HandleMessage(message_tag<Message>); };
 			public:
-				template <typename Message> inline void ReceiveMessage(MessagePtr<Message> mess_ptr) { Base<Message>::ReceiveMessage(mess_ptr); }
+				template <typename Message> inline void ReceiveMessageAsync(MessagePtr<Message> mess_ptr) { Base<Message>::ReceiveMessageAsync(mess_ptr); }
+				template <typename Message> inline void ReceiveMessageSync(MessagePtr<Message> mess_ptr) { Base<Message>::ReceiveMessageSync(mess_ptr); }
 		};
 
 		template <typename Message> class MessageListener<Message>
 		{
-			protected:
-				typedef std::shared_ptr<const Message> MessagePtr;
-				template <typename T> using message_tag = Messaging::message_tag<T>;
-
 			private:
 				typedef MessageChannel<Message> Channel;
 				friend class Channel;
+
+			protected:
+				typedef typename Channel::MessagePtr MessagePtr;
+				template <typename T> using message_tag = Messaging::message_tag<T>;
+
+			private:
 				concurrent_queue<MessagePtr> m_received_messages;
 				bool m_subscription = false;
 
@@ -86,10 +94,16 @@ class Messaging
 				~MessageListener() { SetSubscription(false); }  // Doesn't need to be virtual.
 
 			public:
-				void ReceiveMessage(MessagePtr mess_ptr)
+				void ReceiveMessageAsync(MessagePtr mess_ptr)
 				{
 					m_received_messages.emplace(std::move(mess_ptr));
 					TaskScheduler::ExecuteTask(std::make_shared<MessageHanldeTask>(*this));
+				}
+
+				void ReceiveMessageSync(MessagePtr mess_ptr)
+				{
+					m_received_messages.emplace(std::move(mess_ptr));
+					HandleMessage(message_tag<Message>());
 				}
 		};
 
@@ -102,11 +116,11 @@ class Messaging
 		template <typename... Messages> class MessageQueue : MessageChannel<Messages>...
 		{
 			public:
-				template <typename Msg> static inline void SendMessageAsync(std::unique_ptr<Msg>& mess_ptr) { MessageChannel<Msg>::SendOutMessage(std::move(mess_ptr)); }
+				template <typename Msg> static inline void SendMessageAsync(std::unique_ptr<Msg>& mess_ptr) { MessageChannel<Msg>::SendOutMessageAsync(std::move(mess_ptr)); }
 				template <typename Msg> static inline void SendMessageAsync(std::unique_ptr<Msg>&& mess_ptr) { SendMessageAsync(mess_ptr); }
 				template <typename Msg, typename... Args> static inline void SendMessageAsync(Args&&... args) { SendMessageAsync(CreateMessage<Msg>(std::forward<Args>(args)...)); }
 
-				template <typename Msg> static inline void SendMessageSync(std::unique_ptr<Msg>& mess_ptr) { throw std::exception("Does not implemented yet :("); }
+				template <typename Msg> static inline void SendMessageSync(std::unique_ptr<Msg>& mess_ptr) { MessageChannel<Msg>::SendOutMessageSync(std::move(mess_ptr)); }
 				template <typename Msg> static inline void SendMessageSync(std::unique_ptr<Msg>&& mess_ptr) { SendMessageSync(mess_ptr); }
 				template <typename Msg, typename... Args> static inline void SendMessageSync(Args&&... args) { SendMessageSync(CreateMessage<Msg>(std::forward<Args>(args)...)); }
 

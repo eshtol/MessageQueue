@@ -74,8 +74,10 @@ int main()
 	NotRegisteredMessageListener nrml;   // You can send messages bypass of message queue (directly, privately) as it is observer pattern based system.
 	auto msg = std::make_shared<NotRegisteredMessage>();
 	msg->information = 42;
-	nrml.ReceiveMessage(msg);
+	nrml.ReceiveMessageAsync(msg);
 
+
+	gMessageQueue::SendMessageSync<MainChannelMessage>(666);
 
 	std::cin.get();
 	return 0;
