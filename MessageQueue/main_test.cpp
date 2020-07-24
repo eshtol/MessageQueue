@@ -19,7 +19,7 @@ public:
 	void HandleMessage(message_tag<MemeMessage>) override
 	{
 		if (HaveUnhandledMessages()) std::cout << "Hi! I got some funny memes. Can't wait to share them with you:\n";
-		while (auto message = GetUnhandledMessage()) std::cout << '\t' << message->funny_thing << '\n';
+		while (auto message = ExtractFirstUnhandledMessage()) std::cout << '\t' << message->funny_thing << '\n';
 	}
 
 };
@@ -27,7 +27,7 @@ public:
 class TwoChannelListener : public MessageListener<MainChannelMessage, MemeMessage>
 {
 public:
-	TwoChannelListener() 
+	TwoChannelListener()
 	{
 		SetAllSubscriptions(true);
 	}
@@ -35,25 +35,25 @@ public:
 	void HandleMessage(message_tag<MainChannelMessage>) override
 	{
 		if (HaveUnhandledMessages<MainChannelMessage>()) std::cout << "Got new system messages! Handling them...\n";
-		while (auto message = GetUnhandledMessage<MainChannelMessage>())
+		while (auto message = ExtractFirstUnhandledMessage<MainChannelMessage>())
 			std::cout << "\tWorking on event " << message->event_descritor << '\n';
 	}
 
 	void HandleMessage(message_tag<MemeMessage>) override
 	{
 		if (HaveUnhandledMessages<MemeMessage>()) std::cout << "Got new memes! Printing them...\n";
-		while (auto message = GetUnhandledMessage<MemeMessage>())
+		while (auto message = ExtractFirstUnhandledMessage<MemeMessage>())
 			std::cout << '\t' << message->funny_thing << '\n';
 	}
 };
 
 
-class NotRegisteredMessageListener : public MessageListener<NotRegisteredMessage> 
+class NotRegisteredMessageListener : public MessageListener<NotRegisteredMessage>
 {
-	private:
-		void HandleMessage(message_tag<NotRegisteredMessage>)
-		{
-			std::cout << "Got unregistered message: " << GetUnhandledMessage()->information << "\n";
+private:
+	void HandleMessage(message_tag<NotRegisteredMessage>)
+	{
+		std::cout << "Got unregistered message: " << ExtractFirstUnhandledMessage()->information << "\n";
 		}
 };
 
