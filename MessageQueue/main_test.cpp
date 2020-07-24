@@ -8,6 +8,9 @@
 
 using gMessageQueue = MessageQueue<MainChannelMessage, MemeMessage, FileSystemMessage>;
 
+
+using gMessageQueue2 = MessageQueue<MemeMessage>;
+
 class MemeListener : public MessageListener<MemeMessage>
 {
 public:
@@ -65,6 +68,8 @@ int main()
 
 	gMessageQueue::SendMessageAsync<MemeMessage>("One does not simply use templates without kilobytes of error logs.");
 	gMessageQueue::SendMessageAsync<MainChannelMessage>(4538);
+
+	gMessageQueue2::SendMessageAsync<MemeMessage>("I created new instance of message queue but the second thread didn't appeared :(.");
 
 	NotRegisteredMessageListener nrml;   // You can send messages bypass of message queue (directly, privately) as it is observer pattern based system.
 	auto msg = std::make_shared<NotRegisteredMessage>();

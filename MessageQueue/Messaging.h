@@ -18,25 +18,26 @@ class Messaging
 		{
 			private:
 				typedef MessageListener<Message> ListenerT;
-				static inline concurrent_queue<std::shared_ptr<const Message>> m_queue;
+				typedef std::shared_ptr<Message> MessagePtr;
 				static inline concurrent_uset<ListenerT*> m_listeners;
 
-			protected:
-				static void SendOutQueue()
+				struct DispatchingTask : IExecutableT<MessagePtr>
 				{
-					if (m_queue.size())
+					void execute() override 
 					{
 						const auto iters = m_listeners.iteration_lock();
-						while (m_queue.size())
-							std::for_each(iters.first, iters.second, std::bind(&ListenerT::ReceiveMessage, std::placeholders::_1, m_queue.extract_first()));
+						std::for_each(iters.first, iters.second, std::bind(&ListenerT::ReceiveMessage, std::placeholders::_1, std::get<0>(IExecutableT<MessagePtr>::args)));
 						m_listeners.iteration_unlock();
 					}
-				}
+					using IExecutableT<MessagePtr>::IExecutableT;
+				};
+
+			protected:
+				static inline void SendOutMessage(MessagePtr&& mess_ptr) { DispatchingThread.AcceptTask(std::make_shared<DispatchingTask>(std::move(mess_ptr))); }
 
 			public:
 				static inline void AddListener(ListenerT *const listener) { m_listeners.emplace(listener); }
 				static inline void RemoveListener(ListenerT *const listener) { m_listeners.erase(listener); }
-				static inline void PushMessage(typename decltype(m_queue)::value_type&& mess_ptr) { m_queue.emplace(std::move(mess_ptr)); }
 		};
 
 		template <typename T> struct message_tag {};
@@ -63,13 +64,14 @@ class Messaging
 			protected:
 				typedef std::shared_ptr<const Message> MessagePtr;
 				template <typename T> using message_tag = Messaging::message_tag<T>;
+
 			private:
 				typedef MessageChannel<Message> Channel;
 				friend class Channel;
 				concurrent_queue<MessagePtr> m_received_messages;
 				bool m_subscription = false;
 
-				struct MessageHanldeTask : public IExecutableT<MessageListener&>
+				struct MessageHanldeTask : IExecutableT<MessageListener&>
 				{
 					void execute() override { std::get<0>(IExecutableT<MessageListener&>::args).HandleMessage(message_tag<Message>()); }
 					using IExecutableT<MessageListener&>::IExecutableT;
@@ -82,39 +84,25 @@ class Messaging
 				void GetSubscription() const { return m_subscription; } // Move & copy constructor/assign
 				virtual void HandleMessage(message_tag<Message>) = 0;
 				~MessageListener() { SetSubscription(false); }  // Doesn't need to be virtual.
+
 			public:
 				void ReceiveMessage(MessagePtr mess_ptr)
 				{
 					m_received_messages.emplace(std::move(mess_ptr));
 					TaskScheduler::ExecuteTask(std::make_shared<MessageHanldeTask>(*this));
 				}
-
 		};
 
 		template <typename Message> class ChannelPublisher {};  // Is it needed?
 
 
-		//TaskQueueThread<IExecutable, std::shared_ptr> DispatchingThread;
+		static inline TaskQueueThread<IExecutable, std::shared_ptr> DispatchingThread;
 
 	public:
-		template <typename... Messages> class MessageQueue 
+		template <typename... Messages> class MessageQueue : MessageChannel<Messages>...
 		{
-			private:
-				class QueueCore : public MessageChannel<Messages>...
-				{
-					private:
-						void DispatchingLoop()
-						{
-							while (true) (MessageChannel<Messages>::SendOutQueue(), ..., std::this_thread::sleep_for(std::chrono::milliseconds(1)));	// Magic is here
-						};
-
-					public:
-						QueueCore() { std::thread([this]() { DispatchingLoop(); }).detach(); }
-
-				} static inline m_core;
-
 			public:
-				template <typename Msg> static inline void SendMessageAsync(std::unique_ptr<Msg>& mess_ptr) { m_core.MessageChannel<Msg>::PushMessage(std::move(mess_ptr)); }
+				template <typename Msg> static inline void SendMessageAsync(std::unique_ptr<Msg>& mess_ptr) { MessageChannel<Msg>::SendOutMessage(std::move(mess_ptr)); }
 				template <typename Msg> static inline void SendMessageAsync(std::unique_ptr<Msg>&& mess_ptr) { SendMessageAsync(mess_ptr); }
 				template <typename Msg, typename... Args> static inline void SendMessageAsync(Args&&... args) { SendMessageAsync(CreateMessage<Msg>(std::forward<Args>(args)...)); }
 
