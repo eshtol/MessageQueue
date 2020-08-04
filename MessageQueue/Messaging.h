@@ -57,10 +57,11 @@ class Messaging
 				template <typename Message> inline typename Base<Message>::MessagePtr ExtractFirstUnhandledMessage() { return Base<Message>::ExtractFirstUnhandledMessage(); }
 				template <typename Message> inline bool HaveUnhandledMessages() const { return Base<Message>::HaveUnhandledMessages(); }
 				template <typename Message> inline void SetSubscription(const bool subscribe) { Base<Message>::SetSubscription(subscribe); }
-				inline void SetAllSubscriptions(const bool subscribe) { (SetSubscription<Messages>(subscribe), ...); }
 				template <typename Message> inline void GetSubscription() const { return Base<Message>::GetSubscription(); }
 				template <typename Message> inline void HandleMessage() { Base<Message>::HandleMessage(message_tag<Message>); };
-				template <typename Message> inline void ResetQueue() { Base<Message>::m_received_messages.clear(); }
+				template <typename Message> inline void ResetQueue() { Base<Message>::ResetQueue(); }
+				inline void SetAllSubscriptions(const bool subscribe) { (SetSubscription<Messages>(subscribe), ...); }
+				inline void ResetAllQueues() { (ResetQueue<Messages>(), ...); }
 			public:
 				template <typename Message> inline void ReceiveMessageAsync(MessagePtr<Message> mess_ptr) { Base<Message>::ReceiveMessageAsync(mess_ptr); }
 				template <typename Message> inline void ReceiveMessageSync(MessagePtr<Message> mess_ptr) { Base<Message>::ReceiveMessageSync(mess_ptr); }
