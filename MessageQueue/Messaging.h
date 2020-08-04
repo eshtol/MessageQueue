@@ -26,7 +26,7 @@ class Messaging
 				static inline void SendOutMessage(void (ListenerT::*const receive_method)(MessagePtr), const MessagePtr&& mess_ptr)
 				{
 					const auto iters = m_listeners.iteration_lock();
-					std::for_each(iters.first, iters.second, std::bind(receive_method, std::placeholders::_1, mess_ptr));
+					std::for_each(iters.first, iters.second, std::bind(receive_method, std::placeholders::_1, std::cref(mess_ptr)));
 					m_listeners.iteration_unlock();
 				}
 
@@ -60,6 +60,7 @@ class Messaging
 				inline void SetAllSubscriptions(const bool subscribe) { (SetSubscription<Messages>(subscribe), ...); }
 				template <typename Message> inline void GetSubscription() const { return Base<Message>::GetSubscription(); }
 				template <typename Message> inline void HandleMessage() { Base<Message>::HandleMessage(message_tag<Message>); };
+				template <typename Message> inline void ResetQueue() { Base<Message>::m_received_messages.clear(); }
 			public:
 				template <typename Message> inline void ReceiveMessageAsync(MessagePtr<Message> mess_ptr) { Base<Message>::ReceiveMessageAsync(mess_ptr); }
 				template <typename Message> inline void ReceiveMessageSync(MessagePtr<Message> mess_ptr) { Base<Message>::ReceiveMessageSync(mess_ptr); }
@@ -69,10 +70,9 @@ class Messaging
 		{
 			private:
 				typedef MessageChannel<Message> Channel;
-				friend class Channel;
-
+			public:
+				using MessagePtr = typename Channel::MessagePtr;
 			protected:
-				typedef typename Channel::MessagePtr MessagePtr;
 				template <typename T> using message_tag = Messaging::message_tag<T>;
 
 			private:
@@ -89,11 +89,22 @@ class Messaging
 				MessagePtr ExtractFirstUnhandledMessage() { return HaveUnhandledMessages() ? m_received_messages.extract_first() : nullptr; }
 				bool HaveUnhandledMessages() const { return m_received_messages.size(); }
 				void SetSubscription(const bool subscribe) { if (m_subscription != subscribe) (m_subscription = subscribe) ? Channel::AddListener(this) : Channel::RemoveListener(this); } // Move & copy constructor/assign
-				void GetSubscription() const { return m_subscription; } // Move & copy constructor/assign
+				bool GetSubscription() const { return m_subscription; } // Move & copy constructor/assign
 				virtual void HandleMessage(message_tag<Message>) = 0;
 				~MessageListener() { SetSubscription(false); }  // Doesn't need to be virtual.
+				void ResetQueue() { m_received_messages.clear(); }
 
 			public:
+//				MessageListener() = default;
+//				MessageListener(const MessageListener& other) { SetSubscription(other.GetSubscription()); }
+//
+//				MessageListener(MessageListener&& other)
+//				{ 
+//					SetSubscription(other.GetSubscription());
+//					other.SetSubscription(false);
+//					m_received_messages.swap(other.m_received_messages);
+//				}
+
 				void ReceiveMessageAsync(MessagePtr mess_ptr)
 				{
 					m_received_messages.emplace(std::move(mess_ptr));

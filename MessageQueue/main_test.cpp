@@ -64,7 +64,8 @@ int main()
 	MemeListener ml1, ml2;
 	TwoChannelListener tcl;
 
-	//auto ml3= std::move( ml1);
+	ml1.ReceiveMessageAsync(gMessageQueue::CreateMessage<MemeMessage>("Test"));
+//	auto ml3 = std::move(ml1);
 
 	gMessageQueue::SendMessageAsync<MemeMessage>("One does not simply use templates without kilobytes of error logs.");
 	gMessageQueue::SendMessageAsync<MainChannelMessage>(4538);

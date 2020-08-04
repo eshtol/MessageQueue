@@ -71,4 +71,10 @@ class concurrent_queue : protected std::queue<_Ty, _Container>
 			lock_guard lock(mtx);
 			return MyBase::emplace(std::forward<_Valty>(_Val)...);
 		}
+
+		void clear()
+		{
+			lock_guard lock(mtx);
+			MyBase::clear();
+		}
 };

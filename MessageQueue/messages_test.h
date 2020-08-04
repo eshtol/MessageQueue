@@ -11,7 +11,8 @@ struct MainChannelMessage
 
 struct MemeMessage
 {
-	MemeMessage(const std::string str) : funny_thing(str) {}
+	MemeMessage(const std::string& str) : funny_thing(str) { std::cout << "Meme constructed\n"; }
+	MemeMessage(const MemeMessage&) = delete;
 	std::string funny_thing;
 	~MemeMessage() { std::cout << "Meme destructed\n"; }
 };
