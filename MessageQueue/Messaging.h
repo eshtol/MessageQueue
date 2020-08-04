@@ -5,6 +5,7 @@
 #include "TaskExecutor.h"
 #include "IExecutable.h"
 #include "TaskQueueThread.h"
+#include <mutex>
 
 /* THIS HEADER REQUIRES C++17 */
 
@@ -45,20 +46,17 @@ class Messaging
 				static inline void RemoveListener(ListenerT *const listener) { m_listeners.erase(listener); }
 		};
 
-		template <typename T> struct message_tag {};
-
 		template <typename... Messages> class MessageListener : protected MessageListener<Messages>...
 		{
 			private:
 				template <typename Message> using Base = MessageListener<Message>;
 			protected:
-				template <typename Message> using message_tag = typename Base<Message>::template message_tag<Message>;	//Хитрая строчка, правда? :)
 				template <typename Message> using MessagePtr = typename Base<Message>::MessagePtr;
 				template <typename Message> inline typename Base<Message>::MessagePtr ExtractFirstUnhandledMessage() { return Base<Message>::ExtractFirstUnhandledMessage(); }
 				template <typename Message> inline bool HaveUnhandledMessages() const { return Base<Message>::HaveUnhandledMessages(); }
 				template <typename Message> inline void SetSubscription(const bool subscribe) { Base<Message>::SetSubscription(subscribe); }
 				template <typename Message> inline void GetSubscription() const { return Base<Message>::GetSubscription(); }
-				template <typename Message> inline void HandleMessage() { Base<Message>::HandleMessage(message_tag<Message>); };
+				template <typename Message> inline void HandleMessage() { Base<Message>::HandleMessage(MessagePtr<Message>); };
 				template <typename Message> inline void ResetQueue() { Base<Message>::ResetQueue(); }
 				inline void SetAllSubscriptions(const bool subscribe) { (SetSubscription<Messages>(subscribe), ...); }
 				inline void ResetAllQueues() { (ResetQueue<Messages>(), ...); }
@@ -73,16 +71,21 @@ class Messaging
 				typedef MessageChannel<Message> Channel;
 			public:
 				using MessagePtr = typename Channel::MessagePtr;
-			protected:
-				template <typename T> using message_tag = Messaging::message_tag<T>;
 
 			private:
 				concurrent_queue<MessagePtr> m_received_messages;
 				bool m_subscription = false;
+				std::mutex m_handle_task_mtx;
+
+				void RunHanldeLoop() 
+				{
+					while (const auto message = ExtractFirstUnhandledMessage()) HandleMessage(std::move(message));
+					m_handle_task_mtx.unlock();
+				}
 
 				struct MessageHanldeTask : IExecutableT<MessageListener&>
 				{
-					void execute() override { std::get<0>(IExecutableT<MessageListener&>::args).HandleMessage(message_tag<Message>()); }
+					void execute() override { std::get<0>(IExecutableT<MessageListener&>::args).RunHanldeLoop(); }
 					using IExecutableT<MessageListener&>::IExecutableT;
 				};
 
@@ -91,8 +94,12 @@ class Messaging
 				bool HaveUnhandledMessages() const { return m_received_messages.size(); }
 				void SetSubscription(const bool subscribe) { if (m_subscription != subscribe) (m_subscription = subscribe) ? Channel::AddListener(this) : Channel::RemoveListener(this); } // Move & copy constructor/assign
 				bool GetSubscription() const { return m_subscription; } // Move & copy constructor/assign
-				virtual void HandleMessage(message_tag<Message>) = 0;
-				~MessageListener() { SetSubscription(false); }  // Doesn't need to be virtual.
+				virtual void HandleMessage(const MessagePtr) = 0;
+				~MessageListener() 
+				{
+					SetSubscription(false);
+					std::lock_guard<decltype(m_handle_task_mtx)> lock(m_handle_task_mtx);
+				}  // Doesn't need to be virtual.
 				void ResetQueue() { m_received_messages.clear(); }
 
 			public:
@@ -109,14 +116,10 @@ class Messaging
 				void ReceiveMessageAsync(MessagePtr mess_ptr)
 				{
 					m_received_messages.emplace(std::move(mess_ptr));
-					TaskScheduler::ExecuteTask(std::make_shared<MessageHanldeTask>(*this));
+					if (m_handle_task_mtx.try_lock()) TaskScheduler::ExecuteTask(std::make_shared<MessageHanldeTask>(*this));
 				}
 
-				void ReceiveMessageSync(MessagePtr mess_ptr)
-				{
-					m_received_messages.emplace(std::move(mess_ptr));
-					HandleMessage(message_tag<Message>());
-				}
+				void ReceiveMessageSync(MessagePtr mess_ptr) { HandleMessage(std::move(mess_ptr));	}
 		};
 
 		template <typename Message> class ChannelPublisher {};  // Is it needed?

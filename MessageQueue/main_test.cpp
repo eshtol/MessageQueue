@@ -16,10 +16,10 @@ class MemeListener : public MessageListener<MemeMessage>
 public:
 	MemeListener() { SetSubscription(true); }
 
-	void HandleMessage(message_tag<MemeMessage>) override
+	void HandleMessage(const MessagePtr message) override
 	{
-		if (HaveUnhandledMessages()) std::cout << "Hi! I got some funny memes. Can't wait to share them with you:\n";
-		while (auto message = ExtractFirstUnhandledMessage()) std::cout << '\t' << message->funny_thing << '\n';
+		std::cout << "Hi! I got some funny memes. Can't wait to share them with you:\n";
+		std::cout << '\t' << message->funny_thing << '\n';
 	}
 
 };
@@ -32,18 +32,16 @@ public:
 		SetAllSubscriptions(true);
 	}
 
-	void HandleMessage(message_tag<MainChannelMessage>) override
+	void HandleMessage(const MessagePtr<MainChannelMessage> message) override
 	{
-		if (HaveUnhandledMessages<MainChannelMessage>()) std::cout << "Got new system messages! Handling them...\n";
-		while (auto message = ExtractFirstUnhandledMessage<MainChannelMessage>())
-			std::cout << "\tWorking on event " << message->event_descritor << '\n';
+		std::cout << "Got new system messages! Handling them...\n";
+		std::cout << "\tWorking on event " << message->event_descritor << '\n';
 	}
 
-	void HandleMessage(message_tag<MemeMessage>) override
+	void HandleMessage(const MessagePtr<MemeMessage> message) override
 	{
-		if (HaveUnhandledMessages<MemeMessage>()) std::cout << "Got new memes! Printing them...\n";
-		while (auto message = ExtractFirstUnhandledMessage<MemeMessage>())
-			std::cout << '\t' << message->funny_thing << '\n';
+		std::cout << "Got new memes! Printing them...\n";
+		std::cout << '\t' << message->funny_thing << '\n';
 	}
 
 	~TwoChannelListener() { ResetAllQueues(); }
@@ -53,9 +51,9 @@ public:
 class NotRegisteredMessageListener : public MessageListener<NotRegisteredMessage>
 {
 private:
-	void HandleMessage(message_tag<NotRegisteredMessage>)
+	void HandleMessage(const MessagePtr message)
 	{
-		std::cout << "Got unregistered message: " << ExtractFirstUnhandledMessage()->information << "\n";
+		std::cout << "Got unregistered message: " << message->information << "\n";
 	}
 };
 
