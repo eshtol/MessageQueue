@@ -75,6 +75,6 @@ class concurrent_queue : protected std::queue<_Ty, _Container>
 		void clear()
 		{
 			lock_guard lock(mtx);
-			MyBase::clear();
+			while (size()) pop();
 		}
 };

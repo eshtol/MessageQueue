@@ -45,6 +45,8 @@ public:
 		while (auto message = ExtractFirstUnhandledMessage<MemeMessage>())
 			std::cout << '\t' << message->funny_thing << '\n';
 	}
+
+	~TwoChannelListener() { ResetAllQueues(); }
 };
 
 
@@ -54,7 +56,7 @@ private:
 	void HandleMessage(message_tag<NotRegisteredMessage>)
 	{
 		std::cout << "Got unregistered message: " << ExtractFirstUnhandledMessage()->information << "\n";
-		}
+	}
 };
 
 
