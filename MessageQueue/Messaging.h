@@ -1,4 +1,5 @@
 #pragma once
+
 #include <memory>
 #include <thread>
 #include "ConcurrentContainers.h"
@@ -18,10 +19,10 @@ class Messaging
 		template <typename Message> class MessageChannel
 		{
 			public:
-				typedef std::shared_ptr<const Message> MessagePtr;
+				using MessagePtr = std::shared_ptr<const Message>;
 
 			private:
-				typedef MessageListener<Message> ListenerT;
+				using ListenerT = MessageListener<Message>;
 				static inline concurrent_uset<ListenerT*> m_listeners;
 
 				static inline void SendOutMessage(void (ListenerT::*const receive_method)(MessagePtr), const MessagePtr&& mess_ptr)
@@ -33,7 +34,11 @@ class Messaging
 
 				struct DispatchingTask : IExecutableT<MessagePtr>
 				{
-					void execute() override { SendOutMessage(&ListenerT::ReceiveMessageAsync, std::move(std::get<0>(IExecutableT<MessagePtr>::args))); }
+					void execute() override
+					{
+						SendOutMessage(&ListenerT::ReceiveMessageAsync, std::move(std::get<0>(IExecutableT<MessagePtr>::args)));
+					}
+
 					using IExecutableT<MessagePtr>::IExecutableT;
 				};
 
@@ -46,29 +51,11 @@ class Messaging
 				static inline void RemoveListener(ListenerT *const listener) { m_listeners.erase(listener); }
 		};
 
-		template <typename... Messages> class MessageListener : protected MessageListener<Messages>...
-		{
-			private:
-				template <typename Message> using Base = MessageListener<Message>;
-			protected:
-				template <typename Message> using MessagePtr = typename Base<Message>::MessagePtr;
-				template <typename Message> inline typename Base<Message>::MessagePtr ExtractFirstUnhandledMessage() { return Base<Message>::ExtractFirstUnhandledMessage(); }
-				template <typename Message> inline bool HaveUnhandledMessages() const { return Base<Message>::HaveUnhandledMessages(); }
-				template <typename Message> inline void SetSubscription(const bool subscribe) { Base<Message>::SetSubscription(subscribe); }
-				template <typename Message> inline void GetSubscription() const { return Base<Message>::GetSubscription(); }
-				template <typename Message> inline void HandleMessage() { Base<Message>::HandleMessage(MessagePtr<Message>); };
-				template <typename Message> inline void ResetQueue() { Base<Message>::ResetQueue(); }
-				inline void SetAllSubscriptions(const bool subscribe) { (SetSubscription<Messages>(subscribe), ...); }
-				inline void ResetAllQueues() { (ResetQueue<Messages>(), ...); }
-			public:
-				template <typename Message> inline void ReceiveMessageAsync(MessagePtr<Message> mess_ptr) { Base<Message>::ReceiveMessageAsync(mess_ptr); }
-				template <typename Message> inline void ReceiveMessageSync(MessagePtr<Message> mess_ptr) { Base<Message>::ReceiveMessageSync(mess_ptr); }
-		};
-
 		template <typename Message> class MessageListener<Message>
 		{
 			private:
-				typedef MessageChannel<Message> Channel;
+				using Channel = MessageChannel<Message>;
+
 			public:
 				using MessagePtr = typename Channel::MessagePtr;
 
@@ -90,16 +77,27 @@ class Messaging
 				};
 
 			protected:
-				MessagePtr ExtractFirstUnhandledMessage() { return HaveUnhandledMessages() ? m_received_messages.extract_first() : nullptr; }
+				MessagePtr ExtractFirstUnhandledMessage()
+				{
+					return HaveUnhandledMessages() ? m_received_messages.extract_first() : nullptr;
+				}
+
 				bool HaveUnhandledMessages() const { return m_received_messages.size(); }
-				void SetSubscription(const bool subscribe) { if (m_subscription != subscribe) (m_subscription = subscribe) ? Channel::AddListener(this) : Channel::RemoveListener(this); } // Move & copy constructor/assign
 				bool GetSubscription() const { return m_subscription; } // Move & copy constructor/assign
+
+				void SetSubscription(const bool subscribe)	 // Move & copy constructor/assign
+				{
+					if (m_subscription != subscribe) (m_subscription = subscribe) ? Channel::AddListener(this) : Channel::RemoveListener(this);
+				}
+
 				virtual void HandleMessage(const MessagePtr) = 0;
-				~MessageListener() 
+
+				~MessageListener()	// Doesn't need to be virtual.
 				{
 					SetSubscription(false);
 					std::lock_guard<decltype(m_handle_task_mtx)> lock(m_handle_task_mtx);
-				}  // Doesn't need to be virtual.
+				}
+				
 				void ResetQueue() { m_received_messages.clear(); }
 
 			public:
@@ -124,10 +122,31 @@ class Messaging
 
 		template <typename Message> class ChannelPublisher {};  // Is it needed?
 
-
 		static inline TaskQueueThread<IExecutable, std::shared_ptr> DispatchingThread;
 
 	public:
+		template <typename... Messages> class MessageListener : protected MessageListener<Messages>...
+		{
+			private:
+				template <typename Message> using Base = MessageListener<Message>;
+
+			protected:
+				template <typename Message> using MessagePtr = typename Base<Message>::MessagePtr;
+				template <typename Message> inline typename Base<Message>::MessagePtr ExtractFirstUnhandledMessage() { return Base<Message>::ExtractFirstUnhandledMessage(); }
+				template <typename Message> inline bool HaveUnhandledMessages() const { return Base<Message>::HaveUnhandledMessages(); }
+				template <typename Message> inline void SetSubscription(const bool subscribe) { Base<Message>::SetSubscription(subscribe); }
+				template <typename Message> inline void GetSubscription() const { return Base<Message>::GetSubscription(); }
+				template <typename Message> inline void HandleMessage(MessagePtr<Message>&& message) { Base<Message>::HandleMessage(std::move(message)); };
+				template <typename Message> inline void ResetQueue() { Base<Message>::ResetQueue(); }
+
+				inline void SetAllSubscriptions(const bool subscribe) { (SetSubscription<Messages>(subscribe), ...); }
+				inline void ResetAllQueues() { (ResetQueue<Messages>(), ...); }
+
+			public:
+				template <typename Message> inline void ReceiveMessageAsync(MessagePtr<Message> mess_ptr) { Base<Message>::ReceiveMessageAsync(mess_ptr); }
+				template <typename Message> inline void ReceiveMessageSync(MessagePtr<Message> mess_ptr) { Base<Message>::ReceiveMessageSync(mess_ptr); }
+		};
+
 		template <typename... Messages> class MessageQueue : MessageChannel<Messages>...
 		{
 			public:
