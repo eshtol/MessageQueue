@@ -10,7 +10,7 @@
 
 /* THIS HEADER REQUIRES C++17 */
 
-class Messaging 
+class Messaging
 {
 	public:
 		template <typename... Messages> class MessageListener;  // forwarded declaration
@@ -25,11 +25,14 @@ class Messaging
 				using ListenerT = MessageListener<Message>;
 				static inline concurrent_uset<ListenerT*> m_listeners;
 
-				static inline void SendOutMessage(void (ListenerT::*const receive_method)(MessagePtr), const MessagePtr&& mess_ptr)
+				static inline void SendOutMessage(void (ListenerT::*const receive_method)(MessagePtr), const MessagePtr& mess_ptr)
 				{
-					const auto iters = m_listeners.iteration_lock();
-					std::for_each(iters.first, iters.second, std::bind(receive_method, std::placeholders::_1, std::cref(mess_ptr)));
-					m_listeners.iteration_unlock();
+					const auto traverse_func = [&](const auto& begin, const auto& end)
+					{
+						std::for_each(begin, end, std::bind(receive_method, std::placeholders::_1, std::cref(mess_ptr)));
+					};
+
+					m_listeners.invoke(traverse_func);
 				}
 
 				struct DispatchingTask : IExecutableT<MessagePtr>
@@ -82,7 +85,7 @@ class Messaging
 					return HaveUnhandledMessages() ? m_received_messages.extract_first() : nullptr;
 				}
 
-				bool HaveUnhandledMessages() const { return m_received_messages.size(); }
+				bool HaveUnhandledMessages() const { return !std::empty(m_received_messages); }
 				bool GetSubscription() const { return m_subscription; } // Move & copy constructor/assign
 
 				void SetSubscription(const bool subscribe)	 // Move & copy constructor/assign

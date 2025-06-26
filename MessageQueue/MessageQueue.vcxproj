@@ -169,6 +169,7 @@
     <ClInclude Include="Messaging.h" />
     <ClInclude Include="messages_test.h" />
     <ClInclude Include="TaskExecutor.h" />
+    <ClInclude Include="TaskQueueThread.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

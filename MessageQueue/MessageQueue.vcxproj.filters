@@ -35,5 +35,8 @@
     <ClInclude Include="Messaging.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="TaskQueueThread.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
