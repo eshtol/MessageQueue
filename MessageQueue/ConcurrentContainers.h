@@ -2,7 +2,7 @@
 
 #include <unordered_set>
 #include <queue>
-#include <mutex>
+#include <shared_mutex>
 
 
 template <class _Kty,
@@ -17,54 +17,62 @@ class concurrent_uset : protected std::unordered_set<_Kty, _Hasher, _Keyeq, _All
 		using typename MyBase::key_type;
 		using typename MyBase::iterator;
 
-		mutable std::mutex mtx;
-		using lock_guard = std::lock_guard<decltype(mtx)>;
+		mutable std::shared_mutex m_mutex;
+		using shared_lock = std::shared_lock<decltype(m_mutex)>;
+		using exclusive_lock = std::lock_guard<decltype(m_mutex)>;
 
 	public:
 		using typename MyBase::value_type;
 
 		size_type erase(const key_type& _Keyval) 
 		{
-			lock_guard lock(mtx);
+			exclusive_lock lock(m_mutex);
 			return MyBase::erase(_Keyval);
 		}
 
 		template<class... _Valty> decltype(auto) emplace(_Valty&&... _Val)
 		{
-			lock_guard lock(mtx);
+			exclusive_lock lock(m_mutex);
 			return (void)MyBase::emplace(std::forward<_Valty>(_Val)...).first;
 		}
 
 		decltype(auto) size() const noexcept(noexcept(MyBase::size()))
 		{
-			lock_guard lock(mtx);
+			shared_lock lock(m_mutex);
 			return MyBase::size();
 		}
 
+		template <typename F> decltype(auto) invoke(F&& func) const
+		{
+			shared_lock lock(m_mutex);
+			return func(static_cast<const MyBase&>(*this));
+		}
+		
 		template <typename F> decltype(auto) invoke(F&& func)
 		{
-			lock_guard lock(mtx);
-			return func(static_cast<MyBase&>(*this));	// Providing full unprotected interface under lock.
+			exclusive_lock lock(m_mutex);
+			return func(static_cast<MyBase&>(*this));		// Providing full unprotected interface under lock.
 		}
 };
 
 
 template <class _Ty,
-		  class _Container = std::deque<_Ty> >
+		  class _Container = std::deque<_Ty>>
 class concurrent_queue : protected std::queue<_Ty, _Container>
 {
 	private:
 		using MyBase = std::queue<_Ty, _Container>;
 
-		mutable std::mutex mtx;
-		using lock_guard = std::lock_guard<decltype(mtx)>;
+		mutable std::shared_mutex m_mutex;
+		using shared_lock = std::shared_lock<decltype(m_mutex)>;
+		using exclusive_lock = std::lock_guard<decltype(m_mutex)>;
 
 	public:
 		using typename MyBase::value_type;
 
 		value_type extract_first()
 		{
-			lock_guard lock(mtx);
+			exclusive_lock lock(m_mutex);
 
 			auto element = std::move(MyBase::front());
 			MyBase::pop();
@@ -74,25 +82,25 @@ class concurrent_queue : protected std::queue<_Ty, _Container>
 
 		template<class... _Valty> decltype(auto) emplace(_Valty&&... _Val) 
 		{
-			lock_guard lock(mtx);
+			exclusive_lock lock(m_mutex);
 			return (void)MyBase::emplace(std::forward<_Valty>(_Val)...);
 		}
 
 		void clear()
 		{
-			lock_guard lock(mtx);
+			exclusive_lock lock(m_mutex);
 			while (!MyBase::empty()) MyBase::pop();
 		}
 
 		decltype(auto) size() const noexcept(noexcept(MyBase::size()))
 		{
-			lock_guard lock(mtx);
+			shared_lock lock(m_mutex);
 			return MyBase::size();
 		}
 
 		decltype(auto) empty() const noexcept(noexcept(MyBase::empty()))
 		{
-			lock_guard lock(mtx);
+			shared_lock lock(m_mutex);
 			return MyBase::empty();
 		}
 };

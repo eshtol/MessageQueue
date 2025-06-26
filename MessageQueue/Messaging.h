@@ -32,7 +32,7 @@ class Messaging
 						std::for_each(std::begin(listeners), std::end(listeners), std::bind(receive_method, std::placeholders::_1, std::cref(mess_ptr)));
 					};
 
-					m_listeners.invoke(traverse_func);
+					static_cast<const decltype(m_listeners)&>(m_listeners).invoke(traverse_func);
 				}
 
 				struct DispatchingTask : IExecutableT<MessagePtr>
@@ -69,7 +69,7 @@ class Messaging
 
 				void RunHanldeLoop() 
 				{
-					while (const auto message = ExtractFirstUnhandledMessage()) HandleMessage(std::move(message));
+					while (auto message = ExtractFirstUnhandledMessage()) HandleMessage(std::move(message));
 					m_handle_task_mtx.unlock();
 				}
 
@@ -90,7 +90,8 @@ class Messaging
 
 				void SetSubscription(const bool subscribe)	 // Move & copy constructor/assign
 				{
-					if (m_subscription != subscribe) (m_subscription = subscribe) ? Channel::AddListener(this) : Channel::RemoveListener(this);
+					if (m_subscription != subscribe)
+						((m_subscription = subscribe) ? Channel::AddListener : Channel::RemoveListener)(this);
 				}
 
 				virtual void HandleMessage(const MessagePtr) = 0;
