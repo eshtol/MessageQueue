@@ -25,11 +25,11 @@ class Messaging
 				using ListenerT = MessageListener<Message>;
 				static inline concurrent_uset<ListenerT*> m_listeners;
 
-				static inline void SendOutMessage(void (ListenerT::*const receive_method)(MessagePtr), const MessagePtr& mess_ptr)
+				static void SendOutMessage(void (ListenerT::*const receive_method)(MessagePtr), const MessagePtr& mess_ptr)
 				{
-					const auto traverse_func = [&](const auto& begin, const auto& end)
+					const auto traverse_func = [&](const auto& listeners)
 					{
-						std::for_each(begin, end, std::bind(receive_method, std::placeholders::_1, std::cref(mess_ptr)));
+						std::for_each(std::begin(listeners), std::end(listeners), std::bind(receive_method, std::placeholders::_1, std::cref(mess_ptr)));
 					};
 
 					m_listeners.invoke(traverse_func);
@@ -46,12 +46,12 @@ class Messaging
 				};
 
 			protected:
-				static inline void SendOutMessageAsync(MessagePtr&& mess_ptr) { DispatchingThread.AcceptTask(std::make_shared<DispatchingTask>(std::move(mess_ptr))); }
-				static inline void SendOutMessageSync(MessagePtr&& mess_ptr) { SendOutMessage(&ListenerT::ReceiveMessageSync, std::move(mess_ptr));	}
+				static void SendOutMessageAsync(MessagePtr&& mess_ptr) { DispatchingThread.AcceptTask(std::make_shared<DispatchingTask>(std::move(mess_ptr))); }
+				static void SendOutMessageSync(MessagePtr&& mess_ptr) { SendOutMessage(&ListenerT::ReceiveMessageSync, std::move(mess_ptr));	}
 
 			public:
-				static inline void AddListener(ListenerT *const listener) { m_listeners.emplace(listener); }
-				static inline void RemoveListener(ListenerT *const listener) { m_listeners.erase(listener); }
+				static void AddListener(ListenerT *const listener) { m_listeners.emplace(listener); }
+				static void RemoveListener(ListenerT *const listener) { m_listeners.erase(listener); }
 		};
 
 		template <typename Message> class MessageListener<Message>
@@ -135,33 +135,33 @@ class Messaging
 
 			protected:
 				template <typename Message> using MessagePtr = typename Base<Message>::MessagePtr;
-				template <typename Message> inline typename Base<Message>::MessagePtr ExtractFirstUnhandledMessage() { return Base<Message>::ExtractFirstUnhandledMessage(); }
-				template <typename Message> inline bool HaveUnhandledMessages() const { return Base<Message>::HaveUnhandledMessages(); }
-				template <typename Message> inline void SetSubscription(const bool subscribe) { Base<Message>::SetSubscription(subscribe); }
-				template <typename Message> inline void GetSubscription() const { return Base<Message>::GetSubscription(); }
-				template <typename Message> inline void HandleMessage(MessagePtr<Message>&& message) { Base<Message>::HandleMessage(std::move(message)); };
-				template <typename Message> inline void ResetQueue() { Base<Message>::ResetQueue(); }
+				template <typename Message> typename Base<Message>::MessagePtr ExtractFirstUnhandledMessage() { return Base<Message>::ExtractFirstUnhandledMessage(); }
+				template <typename Message> bool HaveUnhandledMessages() const { return Base<Message>::HaveUnhandledMessages(); }
+				template <typename Message> void SetSubscription(const bool subscribe) { Base<Message>::SetSubscription(subscribe); }
+				template <typename Message> void GetSubscription() const { return Base<Message>::GetSubscription(); }
+				template <typename Message> void HandleMessage(MessagePtr<Message>&& message) { Base<Message>::HandleMessage(std::move(message)); };
+				template <typename Message> void ResetQueue() { Base<Message>::ResetQueue(); }
 
-				inline void SetAllSubscriptions(const bool subscribe) { (SetSubscription<Messages>(subscribe), ...); }
-				inline void ResetAllQueues() { (ResetQueue<Messages>(), ...); }
+				void SetAllSubscriptions(const bool subscribe) { (SetSubscription<Messages>(subscribe), ...); }
+				void ResetAllQueues() { (ResetQueue<Messages>(), ...); }
 
 			public:
-				template <typename Message> inline void ReceiveMessageAsync(MessagePtr<Message> mess_ptr) { Base<Message>::ReceiveMessageAsync(mess_ptr); }
-				template <typename Message> inline void ReceiveMessageSync(MessagePtr<Message> mess_ptr) { Base<Message>::ReceiveMessageSync(mess_ptr); }
+				template <typename Message> void ReceiveMessageAsync(MessagePtr<Message> mess_ptr) { Base<Message>::ReceiveMessageAsync(mess_ptr); }
+				template <typename Message> void ReceiveMessageSync(MessagePtr<Message> mess_ptr) { Base<Message>::ReceiveMessageSync(mess_ptr); }
 		};
 
 		template <typename... Messages> class MessageQueue : MessageChannel<Messages>...
 		{
 			public:
-				template <typename Msg> static inline void SendMessageAsync(std::unique_ptr<Msg>& mess_ptr) { MessageChannel<Msg>::SendOutMessageAsync(std::move(mess_ptr)); }
-				template <typename Msg> static inline void SendMessageAsync(std::unique_ptr<Msg>&& mess_ptr) { SendMessageAsync(mess_ptr); }
-				template <typename Msg, typename... Args> static inline void SendMessageAsync(Args&&... args) { SendMessageAsync(CreateMessage<Msg>(std::forward<Args>(args)...)); }
+				template <typename Msg> static void SendMessageAsync(std::unique_ptr<Msg>& mess_ptr) { MessageChannel<Msg>::SendOutMessageAsync(std::move(mess_ptr)); }
+				template <typename Msg> static void SendMessageAsync(std::unique_ptr<Msg>&& mess_ptr) { SendMessageAsync(mess_ptr); }
+				template <typename Msg, typename... Args> static void SendMessageAsync(Args&&... args) { SendMessageAsync(CreateMessage<Msg>(std::forward<Args>(args)...)); }
 
-				template <typename Msg> static inline void SendMessageSync(std::unique_ptr<Msg>& mess_ptr) { MessageChannel<Msg>::SendOutMessageSync(std::move(mess_ptr)); }
-				template <typename Msg> static inline void SendMessageSync(std::unique_ptr<Msg>&& mess_ptr) { SendMessageSync(mess_ptr); }
-				template <typename Msg, typename... Args> static inline void SendMessageSync(Args&&... args) { SendMessageSync(CreateMessage<Msg>(std::forward<Args>(args)...)); }
+				template <typename Msg> static void SendMessageSync(std::unique_ptr<Msg>& mess_ptr) { MessageChannel<Msg>::SendOutMessageSync(std::move(mess_ptr)); }
+				template <typename Msg> static void SendMessageSync(std::unique_ptr<Msg>&& mess_ptr) { SendMessageSync(mess_ptr); }
+				template <typename Msg, typename... Args> static void SendMessageSync(Args&&... args) { SendMessageSync(CreateMessage<Msg>(std::forward<Args>(args)...)); }
 
-				template <typename Msg, typename... Args> static inline std::unique_ptr<Msg> CreateMessage(Args&&... args) { return std::make_unique<Msg>(std::forward<Args>(args)...); }
+				template <typename Msg, typename... Args> static std::unique_ptr<Msg> CreateMessage(Args&&... args) { return std::make_unique<Msg>(std::forward<Args>(args)...); }
 		};
 };
 

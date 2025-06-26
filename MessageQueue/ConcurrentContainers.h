@@ -32,7 +32,7 @@ class concurrent_uset : protected std::unordered_set<_Kty, _Hasher, _Keyeq, _All
 		template<class... _Valty> decltype(auto) emplace(_Valty&&... _Val)
 		{
 			lock_guard lock(mtx);
-			/*return*/ MyBase::emplace(std::forward<_Valty>(_Val)...).first;
+			return (void)MyBase::emplace(std::forward<_Valty>(_Val)...).first;
 		}
 
 		decltype(auto) size() const noexcept(noexcept(MyBase::size()))
@@ -44,7 +44,7 @@ class concurrent_uset : protected std::unordered_set<_Kty, _Hasher, _Keyeq, _All
 		template <typename F> decltype(auto) invoke(F&& func)
 		{
 			lock_guard lock(mtx);
-			return func(MyBase::begin(), MyBase::end());
+			return func(static_cast<MyBase&>(*this));	// Providing full unprotected interface under lock.
 		}
 };
 
@@ -75,7 +75,7 @@ class concurrent_queue : protected std::queue<_Ty, _Container>
 		template<class... _Valty> decltype(auto) emplace(_Valty&&... _Val) 
 		{
 			lock_guard lock(mtx);
-			/*return*/ MyBase::emplace(std::forward<_Valty>(_Val)...);
+			return (void)MyBase::emplace(std::forward<_Valty>(_Val)...);
 		}
 
 		void clear()
